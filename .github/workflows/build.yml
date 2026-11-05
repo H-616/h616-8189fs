@@ -55,6 +55,9 @@ jobs:
           sed -i 's/^CONFIG_USB_HCI.*/CONFIG_USB_HCI = n/' Makefile
           sed -i 's/^CONFIG_PCI_HCI.*/CONFIG_PCI_HCI = n/' Makefile
           sed -i 's/^CONFIG_PLATFORM_I386_PC.*/CONFIG_PLATFORM_I386_PC = n/' Makefile
+          # 修复 make 4.x 下 ccflags-y 自引用（删掉旧版 kbuild 兼容代码）
+          sed -i 's/^EXTRA_CFLAGS/#EXTRA_CFLAGS/' Makefile
+          sed -i 's/^EXTRA_LDFLAGS/#EXTRA_LDFLAGS/' Makefile
           echo "=== 修改后的关键配置 ==="
           grep -nE "^CONFIG_RTL8188|^CONFIG_SDIO|^CONFIG_USB|^CONFIG_PCI|^CONFIG_PLATFORM_I386" Makefile
           echo "=== 开始编译 ==="
