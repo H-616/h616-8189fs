@@ -17,13 +17,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu bc libssl-dev flex bison
 
-      - name: 下载内核源码 4.9.170 (hexdump0815)
+      - name: 下载内核源码 4.9.170 (orangepi sun50iw9)
         run: |
-          curl -L --retry 3 -o kernel.tar.gz "https://github.com/hexdump0815/linux-allwinner-h616-kernel/archive/refs/tags/4.9.170-bsp-616%2B.tar.gz"
+          curl -L --retry 3 -o kernel.tar.gz "https://github.com/orangepi-xunlong/linux-orangepi/archive/refs/heads/orange-pi-4.9-sun50iw9.tar.gz"
           tar xzf kernel.tar.gz
-          mv linux-allwinner-h616-kernel-4.9.170-bsp-616+ linux-kernel
+          mv linux-orangepi-* linux-kernel
           echo "=== 内核源码目录 ==="
           ls linux-kernel | head -20
+          echo "=== 内核版本 ==="
+          head -5 linux-kernel/Makefile
 
       - name: 下载 8189fs 驱动源码 (Realtek 官方镜像 rtl8189fs 分支)
         run: |
