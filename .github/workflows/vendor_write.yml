@@ -7,33 +7,34 @@ jobs:
   write:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout (拿到 vendor + ko)
-        uses: actions/checkout@v4
-
-      - name: 解压 vendor 镜像
+      - name: 从 release 下载 vendor 镜像和驱动
         run: |
+          curl -L --retry 3 -o vendor_new.ext4.gz "https://github.com/H-616/h616-8189fs/releases/download/assets-v1/vendor_new.ext4.gz"
+          curl -L --retry 3 -o 8189fs.ko "https://github.com/H-616/h616-8189fs/releases/download/assets-v1/8189fs.ko"
           ls -la
+          echo "=== 解压 vendor ==="
           gunzip -c vendor_new.ext4.gz > vendor_new.ext4
           ls -la vendor_new.ext4
 
-      - name: 删除无用的展锐 wifi 驱动腾空间
+      - name: 安装 e2fsprogs 并删除无用的展锐 wifi 驱动
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq e2fsprogs
-          echo "=== 删除前 /modules 空闲空间 ==="
+          echo "=== 删除前空闲空间 ==="
           debugfs -R "stats" vendor_new.ext4 2>/dev/null | grep -E "Free blocks|Free inodes"
-          echo "=== 删除 sprdwl_ng.ko (展锐, 本盒子无用) ==="
+          echo "=== 删除 sprdwl_ng.ko / wcn_bsp.ko (展锐, 本盒子无用) ==="
           debugfs -w -R "rm /modules/sprdwl_ng.ko" vendor_new.ext4
           debugfs -w -R "rm /modules/wcn_bsp.ko" vendor_new.ext4
           echo "=== 删除后空闲空间 ==="
           debugfs -R "stats" vendor_new.ext4 2>/dev/null | grep -E "Free blocks|Free inodes"
 
-      - name: 写入 8189fs.ko
+      - name: 写入 8189fs.ko 并校验
         run: |
-          echo "=== 写 8189fs.ko 到 /modules/ ==="
           debugfs -w -R "write 8189fs.ko /modules/8189fs.ko" vendor_new.ext4
-          echo "=== 验证 ==="
+          echo "=== 校验 modules 目录 ==="
           debugfs -R "ls -l /modules" vendor_new.ext4 | grep -E "8189fs|sprdwl|wcn_bsp"
+          echo "=== e2fsck 校验文件系统 ==="
+          e2fsck -fy vendor_new.ext4 2>&1 | tail -8 || true
 
       - name: 压缩输出
         run: |
