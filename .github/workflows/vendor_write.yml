@@ -1,0 +1,48 @@
+name: Write 8189fs.ko into vendor
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  write:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout (拿到 vendor + ko)
+        uses: actions/checkout@v4
+
+      - name: 解压 vendor 镜像
+        run: |
+          ls -la
+          gunzip -c vendor_new.ext4.gz > vendor_new.ext4
+          ls -la vendor_new.ext4
+
+      - name: 删除无用的展锐 wifi 驱动腾空间
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq e2fsprogs
+          echo "=== 删除前 /modules 空闲空间 ==="
+          debugfs -R "stats" vendor_new.ext4 2>/dev/null | grep -E "Free blocks|Free inodes"
+          echo "=== 删除 sprdwl_ng.ko (展锐, 本盒子无用) ==="
+          debugfs -w -R "rm /modules/sprdwl_ng.ko" vendor_new.ext4
+          debugfs -w -R "rm /modules/wcn_bsp.ko" vendor_new.ext4
+          echo "=== 删除后空闲空间 ==="
+          debugfs -R "stats" vendor_new.ext4 2>/dev/null | grep -E "Free blocks|Free inodes"
+
+      - name: 写入 8189fs.ko
+        run: |
+          echo "=== 写 8189fs.ko 到 /modules/ ==="
+          debugfs -w -R "write 8189fs.ko /modules/8189fs.ko" vendor_new.ext4
+          echo "=== 验证 ==="
+          debugfs -R "ls -l /modules" vendor_new.ext4 | grep -E "8189fs|sprdwl|wcn_bsp"
+
+      - name: 压缩输出
+        run: |
+          gzip -c vendor_new.ext4 > vendor_done.ext4.gz
+          ls -la vendor_done.ext4.gz
+
+      - name: 上传新 vendor
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendor-done
+          path: vendor_done.ext4.gz
+          if-no-files-found: error
