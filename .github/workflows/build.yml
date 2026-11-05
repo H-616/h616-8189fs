@@ -1,0 +1,74 @@
+name: Build 8189fs.ko (H616 4.9.170)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout (拿到 kernel_config.txt)
+        uses: actions/checkout@v4
+
+      - name: 安装交叉编译工具链
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu bc libssl-dev flex bison
+
+      - name: 下载内核源码 4.9.170 (hexdump0815)
+        run: |
+          curl -L --retry 3 -o kernel.tar.gz "https://github.com/hexdump0815/linux-allwinner-h616-kernel/archive/refs/tags/4.9.170-bsp-616%2B.tar.gz"
+          tar xzf kernel.tar.gz
+          mv linux-allwinner-h616-kernel-4.9.170-bsp-616+ linux-kernel
+          echo "=== 内核源码目录 ==="
+          ls linux-kernel | head -20
+
+      - name: 下载 8189fs 驱动源码 (Realtek 官方镜像 rtl8189fs 分支)
+        run: |
+          git clone --depth 1 -b rtl8189fs https://github.com/jwrdegoede/rtl8189ES_linux.git rtl8189ES
+          echo "=== 8189fs 源码 Makefile 关键配置 ==="
+          grep -nE "^CONFIG_RTL8188|^CONFIG_SDIO|^CONFIG_USB|^CONFIG_PCI|^CONFIG_PLATFORM_I386|^CONFIG_PLATFORM_ARM" rtl8189ES/Makefile | head -40
+
+      - name: 准备内核 (生成头文件 + Module.symvers)
+        run: |
+          cp kernel_config.txt linux-kernel/.config
+          cd linux-kernel
+          echo "=== 确认 LOCALVERSION / MODVERSIONS ==="
+          grep -E "^CONFIG_LOCALVERSION|^CONFIG_MODVERSIONS" .config
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- EXTRAVERSION= LOCALVERSION= olddefconfig 2>&1 | tail -5
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- EXTRAVERSION= LOCALVERSION= prepare 2>&1 | tail -5
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- EXTRAVERSION= LOCALVERSION= modules_prepare 2>&1 | tail -5
+          echo "=== Module.symvers 是否生成 ==="
+          ls -la Module.symvers 2>&1
+
+      - name: 编译 8189fs.ko
+        run: |
+          cd rtl8189ES
+          # 强制芯片/接口/平台配置（不管原值）
+          sed -i 's/^CONFIG_RTL8188F.*/CONFIG_RTL8188F = y/' Makefile
+          sed -i 's/^CONFIG_RTL8188E.*/CONFIG_RTL8188E = n/' Makefile
+          sed -i 's/^CONFIG_SDIO_HCI.*/CONFIG_SDIO_HCI = y/' Makefile
+          sed -i 's/^CONFIG_USB_HCI.*/CONFIG_USB_HCI = n/' Makefile
+          sed -i 's/^CONFIG_PCI_HCI.*/CONFIG_PCI_HCI = n/' Makefile
+          sed -i 's/^CONFIG_PLATFORM_I386_PC.*/CONFIG_PLATFORM_I386_PC = n/' Makefile
+          echo "=== 修改后的关键配置 ==="
+          grep -nE "^CONFIG_RTL8188|^CONFIG_SDIO|^CONFIG_USB|^CONFIG_PCI|^CONFIG_PLATFORM_I386" Makefile
+          echo "=== 开始编译 ==="
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$PWD/../linux-kernel 2>&1 | tail -30
+          echo "=== 编译产物 ==="
+          ls -la 8189fs.ko 2>&1
+
+      - name: 验证 vermagic
+        run: |
+          echo "=== 8189fs.ko 的 vermagic ==="
+          aarch64-linux-gnu-modinfo rtl8189ES/8189fs.ko 2>/dev/null | grep -iE "vermagic|filename|depends" || \
+          strings rtl8189ES/8189fs.ko | grep -i vermagic || echo "无法读取 vermagic"
+
+      - name: 上传 8189fs.ko
+        uses: actions/upload-artifact@v4
+        with:
+          name: 8189fs-ko
+          path: rtl8189ES/8189fs.ko
+          if-no-files-found: error
