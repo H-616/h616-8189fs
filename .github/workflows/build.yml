@@ -33,7 +33,7 @@ jobs:
           echo "=== 8189fs 源码 Makefile 关键配置 ==="
           grep -nE "^CONFIG_RTL8188|^CONFIG_SDIO|^CONFIG_USB|^CONFIG_PCI|^CONFIG_PLATFORM_I386|^CONFIG_PLATFORM_ARM" rtl8189ES/Makefile | head -40
 
-      - name: 准备内核 (生成头文件 + Module.symvers)
+      - name: 准备内核 (生成头文件)
         run: |
           cp kernel_config.txt linux-kernel/.config
           cd linux-kernel
@@ -42,8 +42,8 @@ jobs:
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- EXTRAVERSION= LOCALVERSION= olddefconfig 2>&1 | tail -5
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- EXTRAVERSION= LOCALVERSION= prepare 2>&1 | tail -5
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- EXTRAVERSION= LOCALVERSION= modules_prepare 2>&1 | tail -5
-          echo "=== Module.symvers 是否生成 ==="
-          ls -la Module.symvers 2>&1
+          echo "=== 生成的关键头文件 ==="
+          ls -la include/generated/utsrelease.h include/generated/autoconf.h include/config/kernel.release 2>&1
 
       - name: 编译 8189fs.ko
         run: |
