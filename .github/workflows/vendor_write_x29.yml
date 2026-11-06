@@ -1,0 +1,40 @@
+name: Write 8189fs into X29 vendor
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  write:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 下载 vendor 和驱动
+        run: |
+          curl -L --retry 3 -o x29_vendor.gz "https://github.com/H-616/h616-8189fs/releases/download/assets-v1/x29_vendor.gz"
+          curl -L --retry 3 -o 8189fs.ko "https://github.com/H-616/h616-8189fs/releases/download/assets-v1/8189fs.ko"
+          gunzip -c x29_vendor.gz > vendor.img
+          ls -la vendor.img 8189fs.ko
+
+      - name: 安装 e2fsprogs 并写入驱动
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq e2fsprogs
+          echo "=== 写入前 modules 目录 ==="
+          debugfs -R "ls -l /modules" vendor.img | grep -E "xr829|xr819|8189" || true
+          echo "=== 写入 8189fs.ko ==="
+          debugfs -w -R "write 8189fs.ko /modules/8189fs.ko" vendor.img
+          echo "=== 写入后 modules 目录 ==="
+          debugfs -R "ls -l /modules" vendor.img | grep -E "xr829|xr819|8189"
+          echo "=== e2fsck 校验 ==="
+          e2fsck -fy vendor.img 2>&1 | tail -8 || true
+
+      - name: 压缩输出
+        run: |
+          gzip -c vendor.img > x29_vendor_done.gz
+          ls -la x29_vendor_done.gz
+
+      - name: 上传结果
+        uses: actions/upload-artifact@v4
+        with:
+          name: x29-vendor-done
+          path: x29_vendor_done.gz
+          if-no-files-found: error
